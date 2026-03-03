@@ -1,56 +1,318 @@
 <!DOCTYPE html>
-<html class="vocabbi_document">
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"> 
+<html lang="fr">
 
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Metropole Electronik</title>
+
+	<!-- Processing.js for the visual sketch -->
 	<script src="js/processing-1.4.1.min.js"></script>
-	<script src="js/webpd-latest.min.js"></script>
-	<script src="js/jquery-1.8.2.min.js"></script>
-	
+
+	<!-- New WebPd v1 runtime (AudioWorklet-based, replaces old webpd-latest.js) -->
+	<script src="js/webpd-runtime.js"></script>
 
 	<style>
-        body {
-            margin: 0px;
-            overflow: hidden;
-            background-color: white;
-			
-        }
-    </style>
-	
-	
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		body {
+			background-color: #000;
+			overflow: hidden;
+			width: 100vw;
+			height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+
+		canvas {
+			display: block;
+		}
+
+		#start-overlay {
+			position: fixed;
+			inset: 0;
+			background: rgba(0, 0, 0, 0.88);
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 32px;
+			z-index: 10;
+			transition: opacity 0.5s ease;
+		}
+
+		#start-overlay h1 {
+			color: #fff;
+			font-family: 'Courier New', monospace;
+			font-size: clamp(1.2rem, 4vw, 2.2rem);
+			letter-spacing: 0.25em;
+			text-transform: uppercase;
+		}
+
+		#start-overlay p {
+			color: #aaa;
+			font-family: 'Courier New', monospace;
+			font-size: 0.85rem;
+			letter-spacing: 0.1em;
+		}
+
+		#start-btn {
+			padding: 14px 48px;
+			background: transparent;
+			border: 1px solid #fff;
+			color: #fff;
+			font-family: 'Courier New', monospace;
+			font-size: 1rem;
+			letter-spacing: 0.3em;
+			text-transform: uppercase;
+			cursor: pointer;
+			transition: background 0.2s, color 0.2s;
+		}
+
+		#start-btn:hover {
+			background: #fff;
+			color: #000;
+		}
+
+		#start-btn:disabled {
+			opacity: 0.4;
+			cursor: default;
+		}
+
+		#loading-msg {
+			color: #666;
+			font-family: 'Courier New', monospace;
+			font-size: 0.75rem;
+			letter-spacing: 0.15em;
+		}
+	</style>
 </head>
- 
+
 <body>
-    <script>
-      
 
-		 var patch,sketch, docH,docW;
-		 docH = $(window).height();
-		 docW = $(window).width();
-		 var callback = callback || function() {};
-    	$.get('engine.pd', function(patchFile) {
-		     patch = Pd.compat.parse(patchFile);
-            console.log('WebPd patch ready');
-		    patch.play();
-		     $('#loading').remove();
-		    $.get('carte_interactive.pde', function(sketchFile) {
-		        sketch = new Processing('canvas', sketchFile);
-                console.log('Processing.js sketch ready');
-		    });
+	<div id="start-overlay">
+		<h1>Metropole Electronik</h1>
+		<p id="loading-msg">Chargement du moteur audio&#8230;</p>
+		<button id="start-btn" disabled>&#9654;&nbsp; D&#233;marrer</button>
+	</div>
+
+	<canvas id="canvas"></canvas>
+
+	<script>
+		// ----------------------------------------------------------------
+		// Channel name -> WebPd compiled node ID lookup
+		// Each channel is a floatatom->[s pjsX] pair appended to
+		// engine-patched.pd at positions n_0_816, n_0_818, ... (step 2)
+		// Verified against wasm metadata before deployment.
+		// ----------------------------------------------------------------
+		var CHANNEL_TO_NODE_ID = {
+			"pjsvol1": "n_0_816",
+			"pjssize1": "n_0_818",
+			"pjscut1_on": "n_0_820",
+			"pjssample1_on": "n_0_822",
+			"pjsfilter_on1": "n_0_824",
+			"pjsfilter1": "n_0_826",
+			"pjsdisto_on1": "n_0_828",
+			"pjsdisto1": "n_0_830",
+			"pjsringmod_on1": "n_0_832",
+			"pjsringmod1": "n_0_834",
+			"pjsreverb_on1": "n_0_836",
+			"pjsreverb1": "n_0_838",
+			"pjsvol2": "n_0_840",
+			"pjssize2": "n_0_842",
+			"pjscut2_on": "n_0_844",
+			"pjssample2_on": "n_0_846",
+			"pjsfilter_on2": "n_0_848",
+			"pjsfilter2": "n_0_850",
+			"pjsdisto_on2": "n_0_852",
+			"pjsdisto2": "n_0_854",
+			"pjsringmod_on2": "n_0_856",
+			"pjsringmod2": "n_0_858",
+			"pjsreverb_on2": "n_0_860",
+			"pjsreverb2": "n_0_862",
+			"pjsvol3": "n_0_864",
+			"pjssize3": "n_0_866",
+			"pjscut3_on": "n_0_868",
+			"pjssample3_on": "n_0_870",
+			"pjsfilter_on3": "n_0_872",
+			"pjsfilter3": "n_0_874",
+			"pjsdisto_on3": "n_0_876",
+			"pjsdisto3": "n_0_878",
+			"pjsringmod_on3": "n_0_880",
+			"pjsringmod3": "n_0_882",
+			"pjsreverb_on3": "n_0_884",
+			"pjsreverb3": "n_0_886",
+			"pjsvol4": "n_0_888",
+			"pjssize4": "n_0_890",
+			"pjscut4_on": "n_0_892",
+			"pjssample4_on": "n_0_894",
+			"pjsfilter_on4": "n_0_896",
+			"pjsfilter4": "n_0_898",
+			"pjsdisto_on4": "n_0_900",
+			"pjsdisto4": "n_0_902",
+			"pjsringmod_on4": "n_0_904",
+			"pjsringmod4": "n_0_906",
+			"pjsreverb_on4": "n_0_908",
+			"pjsreverb4": "n_0_910",
+			"pjsvol5": "n_0_912",
+			"pjssize5": "n_0_914",
+			"pjscut5_on": "n_0_916",
+			"pjssample5_on": "n_0_918",
+			"pjsfilter_on5": "n_0_920",
+			"pjsfilter5": "n_0_922",
+			"pjsdisto_on5": "n_0_924",
+			"pjsdisto5": "n_0_926",
+			"pjsringmod_on5": "n_0_928",
+			"pjsringmod5": "n_0_930",
+			"pjsreverb_on5": "n_0_932",
+			"pjsreverb5": "n_0_934",
+			"pjsvol6": "n_0_936",
+			"pjssize6": "n_0_938",
+			"pjscut6_on": "n_0_940",
+			"pjssample6_on": "n_0_942",
+			"pjsfilter_on6": "n_0_944",
+			"pjsfilter6": "n_0_946",
+			"pjsdisto_on6": "n_0_948",
+			"pjsdisto6": "n_0_950",
+			"pjsringmod_on6": "n_0_952",
+			"pjsringmod6": "n_0_954",
+			"pjsreverb_on6": "n_0_956",
+			"pjsreverb6": "n_0_958"
+		};
+
+		// ----------------------------------------------------------------
+		// Global `patch` object — mirrors the old WebPd v0 API used by
+		// carte_interactive.pde: patch.send("channelName", value)
+		// ----------------------------------------------------------------
+		var webpdNode = null;
+
+		window.patch = {
+			send: function (channelName, value) {
+				if (!webpdNode) return;
+				var nodeId = CHANNEL_TO_NODE_ID[channelName];
+				if (!nodeId) {
+					// Suppress repeated warnings for unknown channels
+					return;
+				}
+				webpdNode.port.postMessage({
+					type: 'io:messageReceiver',
+					payload: {
+						nodeId: nodeId,
+						portletId: '0',
+						message: [value]
+					}
+				});
+			}
+		};
+
+		// ----------------------------------------------------------------
+		// WebPd v1 audio initialisation
+		// ----------------------------------------------------------------
+		// Silence all 6 sample channels — called after the wasm starts to
+		// suppress the [loadbang]->[delay 1000]->[s init]->tabplay~ chain.
+		// Volumes are also zeroed so any one-shot tabplay triggers are silent.
+		// try/catch guards against any residual timing races.
+		function muteAllSamples() {
+			var chs = ['pjssample1_on', 'pjssample2_on', 'pjssample3_on',
+				'pjssample4_on', 'pjssample5_on', 'pjssample6_on',
+				'pjsvol1', 'pjsvol2', 'pjsvol3',
+				'pjsvol4', 'pjsvol5', 'pjsvol6'];
+			chs.forEach(function (ch) {
+				try { window.patch.send(ch, 0); } catch (e) { }
+			});
+		}
+
+
+
+		var audioContext = new AudioContext();
+		var compiledPatch = null;
+
+		var loadingMsg = document.getElementById('loading-msg');
+		var startBtn = document.getElementById('start-btn');
+		var overlay = document.getElementById('start-overlay');
+
+		function initAudio() {
+			WebPdRuntime.initialize(audioContext)
+				.then(function () { return fetch('patch.wasm?v=' + Date.now()); })
+				.then(function (r) { return r.arrayBuffer(); })
+
+				.then(function (buf) {
+					compiledPatch = buf;
+					loadingMsg.textContent = 'Pret.';
+					startBtn.disabled = false;
+				})
+				.catch(function (err) {
+					loadingMsg.textContent = 'Erreur de chargement : ' + err.message;
+					console.error(err);
+				});
+		}
+
+		function startAudio() {
+			var resume = audioContext.state === 'suspended'
+				? audioContext.resume()
+				: Promise.resolve();
+
+			return resume.then(function () {
+				return WebPdRuntime.run(
+					audioContext,
+					compiledPatch,
+					WebPdRuntime.defaultSettingsForRun('./patch.wasm')
+				);
+			}).then(function (node) {
+				webpdNode = node;
+				webpdNode.connect(audioContext.destination);
+				// Mute is deferred: the AudioWorklet loads WASM asynchronously
+				// and engine.io.messageReceivers isn't ready instantly.
+				// 500 ms is enough for worklet setup.
+				// 1500 ms catches the [loadbang]->[delay 1000]->[s init] chain.
+				setTimeout(muteAllSamples, 500);
+				setTimeout(muteAllSamples, 1500);
+			});
+		}
+
+		// ----------------------------------------------------------------
+		// Processing.js sketch
+		// ----------------------------------------------------------------
+		function initSketch() {
+			fetch('carte_interactive.pde')
+				.then(function (r) { return r.text(); })
+				.then(function (src) {
+					new Processing('canvas', src);
+					console.log('Processing.js sketch ready');
+				})
+				.catch(function (err) { console.error('Sketch load error:', err); });
+		}
+
+		// ----------------------------------------------------------------
+		// Start button handler
+		// ----------------------------------------------------------------
+		startBtn.addEventListener('click', function () {
+			startBtn.disabled = true;
+			loadingMsg.textContent = 'Demarrage...';
+			startAudio()
+				.then(function () {
+					overlay.style.opacity = '0';
+					setTimeout(function () { overlay.remove(); }, 500);
+					// Delay sketch start: the AudioWorklet compiles WASM asynchronously
+					// after run() resolves. We wait 1s to ensure io.messageReceivers is
+					// fully populated before the Processing sketch fires patch.send() at 30fps.
+					setTimeout(initSketch, 1000);
+				})
+				.catch(function (err) {
+					loadingMsg.textContent = 'Erreur audio : ' + err.message;
+					startBtn.disabled = false;
+					console.error(err);
+				});
 		});
-       
-    </script>
 
-    <div id="loading" style="maring: 0 auto"> Chargement ... </div>
-    
-    <div style="width:900px; height:500px; margin: 0 auto; padding: 10px;">
-
-    <canvas id="canvas" style="overflow:hidden;"></canvas>
-
-   </div>
-
-   
-   
+		initAudio();
+	</script>
 
 </body>
+
 </html>

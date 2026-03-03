@@ -1,0 +1,31 @@
+﻿[95m[1m~ WebPd 1.0.0-alpha.14 ~[22m[39m[90m[39m
+[90mLicensed under LGPL V3[39m
+[90m[39mUsage: cli [options]
+
+Options:
+  -V, --version                 output the version number
+  -i, --input <filename>        Set the input file. Extensions supported :
+                                [4m.pd[24m - Pure Data text
+                                [4m.wasm[24m - Web Assembly WebPd module
+  -o, --output <path>           Select a file path or directory for output.
+  -f, --output-format <format>  Select an output format. If not provided, the
+                                format will be inferred from output filename.
+                                Available formats :
+                                [4mwasm[24m - Web Assembly WebPd module
+                                [4mjavascript[24m - JavaScript WebPd module
+                                [4mapp[24m - Complete web app embedding your
+                                compiled WebPd patch
+                                [4mwav[24m - An audio preview of your patch
+  --engine <engine>             Select an engine for audio generation (default
+                                "wasm"). Engines supported :
+                                [4mjavascript[24m, [4mwasm[24m
+  --audio-duration <seconds>    Duration of the generated audio in seconds.
+  --check-support
+  --whats-implemented
+  -h, --help                    display help for command
+[95m[39m
+[95m~ Usage examples ~[39m
+  Generating a web page embedding myPatch.pd in path/to/folder : [36m[39m
+[36m    webpd -i myPatch.pd -o path/to/folder -f app[39m
+  Generating a wav preview of myPatch.pd : [36m[39m
+[36m    webpd -i myPatch.pd -o myPatch.wav[39m
